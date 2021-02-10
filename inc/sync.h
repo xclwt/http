@@ -45,7 +45,7 @@ public:
 
     ~CondVar();
 
-    bool wait();
+    bool wait(pthread_mutex_t *mutex);
 
     bool signal();
 
