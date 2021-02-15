@@ -4,7 +4,7 @@
 
 #include "timer.h"
 
-RotationNode::RotationNode(int rot): rotation(rot), prev(nullptr), next(nullptr), start(nullptr){}
+RotationNode::RotationNode(int rot, int ts): rotation(rot), timeSlot(ts), prev(nullptr), next(nullptr), start(nullptr){}
 
 RotationNode::~RotationNode(){
     this->deleteAll();
@@ -15,6 +15,7 @@ void RotationNode::addTimer(Timer *timer){
         this->start->prev = timer;
 
     timer->next = this->start;
+    timer->rot = this;
     this->start = timer;
 }
 
@@ -33,7 +34,7 @@ void RotationNode::deleteAll(){
     }
 }
 
-Timer::Timer(int ts): next(nullptr), prev(nullptr), timeSlot(ts){}
+Timer::Timer(): next(nullptr), prev(nullptr){}
 
 TimeWheel::TimeWheel(): TimeWheel(1){}
 
@@ -55,9 +56,9 @@ TimeWheel::~TimeWheel(){
     }
 }
 
-void TimeWheel::add_timer(int timeout){
+Timer* TimeWheel::add_timer(int timeout){
     if (timeout < 0)
-        return;
+        return nullptr;
 
     int ticks = 0;
 
@@ -68,20 +69,20 @@ void TimeWheel::add_timer(int timeout){
 
     int idx = (cur_slot + ticks) % N;
     int rotation = ticks / N;
-    auto *newTimer = new Timer(idx);
+    auto *newTimer = new Timer();
 
     if (!slots[idx]) {
-        auto *newRotation = new RotationNode(rotation);
+        auto *newRotation = new RotationNode(rotation, idx);
         slots[idx] = newRotation;
         newRotation->addTimer(newTimer);
-        return;
+        return newTimer;
     }
 
     RotationNode *tmp = slots[idx];
 
     while (tmp){
         if (rotation < tmp->rotation){
-            auto *newRotation = new RotationNode(rotation);
+            auto *newRotation = new RotationNode(rotation, idx);
 
             newRotation->addTimer(newTimer);
 
@@ -103,11 +104,18 @@ void TimeWheel::add_timer(int timeout){
                 continue;
             }
 
-            tmp->next = new RotationNode(rotation);
+            tmp->next = new RotationNode(rotation, idx);
             tmp->next->addTimer(newTimer);
             break;
         }
     }
+
+    return newTimer;
+}
+
+void TimeWheel::adjust_timer(Timer *timer, int timeout){
+    //RotationNode *rotationNode = timer->rot;
+    //int slot = rotationNode->timeSlot;
 }
 
 void TimeWheel::tick(){

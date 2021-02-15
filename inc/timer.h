@@ -22,7 +22,7 @@ struct ClientData{
 
 class RotationNode{
 public:
-    explicit RotationNode(int rot);
+    RotationNode(int rot, int ts);
 
     ~RotationNode();
 
@@ -34,6 +34,7 @@ public:
 
 public:
     int rotation;
+    int timeSlot;
     RotationNode *prev;
     RotationNode *next;
     Timer *start;
@@ -41,10 +42,10 @@ public:
 
 class Timer{
 public:
-    explicit Timer(int ts);
+    Timer();
 
 public:
-    int timeSlot;
+    RotationNode *rot;
     void (*cb_func)(ClientData*);
     ClientData* user_data;
     Timer* next;
@@ -59,7 +60,9 @@ public:
 
     ~TimeWheel();
 
-    void add_timer(int timeout);
+    Timer* add_timer(int timeout);
+
+    void adjust_timer(Timer *timer, int timeout);
 
     void tick();
 

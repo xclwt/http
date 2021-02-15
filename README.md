@@ -1,2 +1,3 @@
-# http
-a tiny http server written in C
+# httpServer
+a tiny http server written in C++
+
