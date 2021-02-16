@@ -13,13 +13,15 @@
 #include "sync.h"
 
 using namespace std;
-template<class T>
+
+
 class ThreadPool{
 public:
     ThreadPool(int threadCount = 8);
 
     ~ThreadPool();
 
+    template<class T>
     void AddTask(T&& task);
 
 private:

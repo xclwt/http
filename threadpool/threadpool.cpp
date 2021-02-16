@@ -10,8 +10,8 @@
 #include <cassert>
 #include "threadpool.h"
 
-template<class T>
-ThreadPool<T>::ThreadPool(int threadCount){
+
+ThreadPool::ThreadPool(int threadCount){
     assert(threadCount > 0);
     for(int i = 0; i < threadCount; i++){
         std::thread([=]{
@@ -27,24 +27,24 @@ ThreadPool<T>::ThreadPool(int threadCount){
                 }else if(isClosed)
                     break;
                 else
-                    this->cond.wait(m_locker.get());
+                    m_cond.wait(m_locker.get());
             }
         }).detach();
     }
 }
 
-template<class T>
-ThreadPool<T>::~ThreadPool<T>(){
-    this->m_locker.lock();
-    this->isClosed = true;
-    this->m_locker.unlock();
-    this->m_cond.broadcast();
+
+ThreadPool::~ThreadPool(){
+    m_locker.lock();
+    isClosed = true;
+    m_locker.unlock();
+    m_cond.broadcast();
 }
 
 template<class T>
-void ThreadPool<T>::AddTask(T &&task){
-    this->m_locker.lock();
-    this->taskQueue.emplace(std::forward<T>(task));
-    this->m_locker.unlock();
-    this->m_cond.broadcast();
+void ThreadPool::AddTask(T &&task){
+    m_locker.lock();
+    taskQueue.emplace(std::forward<T>(task));
+    m_locker.unlock();
+    m_cond.broadcast();
 }

@@ -5,6 +5,7 @@
 #include "log.h"
 
 Log::Log(){
+    m_log_open = false;
     m_log_idx = 0;
     m_max_queue_size = 0;
     m_isAsync = false;
@@ -48,6 +49,7 @@ void Log::openNewLog(int oflag, const char *format, ...){
 void Log::init(int level, int maxLineNum, int maxQueueSize, int logBufSize, const char *filepath, const char *suffix){
     m_level = level;
     m_max_line_num = maxLineNum;
+    m_log_open = true;
     m_logBufSize = logBufSize;
     m_logBuffer = new char[logBufSize];
 
@@ -126,6 +128,10 @@ void Log::writeLog(int level, const char *format, ...){
         write(m_fd, log_str.c_str(), log_str.size());
         m_mtx.unlock();
     }
+}
+
+bool Log::isOpen(){
+    return m_log_open;
 }
 
 Log* Log::getInstance(){

@@ -18,6 +18,9 @@
 #define LOG_WARNING 2
 #define LOG_ERROR   3
 
+#define DEFAULT_LOG_BUF 8192
+#define DEFAULT_MAX_LINE 50000
+
 
 
 //#define LOG_ASYNC   true
@@ -27,13 +30,15 @@ using namespace std;
 
 class Log{
 public:
-    void init(int level, int maxLineNum, int maxQueueSize, int logBufSize, const char *filepath, const char *filename);
+    static void init(int level, int maxLineNum, int maxQueueSize, int logBufSize, const char *filepath, const char *filename);
 
     int getLevel();
 
     void setLevel(int level);
 
     void writeLog(int level, const char *format, ...);
+
+    bool isOpen();
 
     static Log *getInstance();
 
@@ -56,7 +61,6 @@ private:
     char *m_logBuffer;
     int m_fd;           //log fd
     int m_max_line_num;
-    int m_max_queue_size;
     int m_logBufSize;
     int m_line_cnt;     //current line count
     int m_level;        //current log level
@@ -65,15 +69,15 @@ private:
     unique_ptr<BlockQueue<string>> m_logQueue;
     pthread_t m_async_write_thread;
     bool m_isAsync;
-    bool m_log_closed;  //log closed or not
+    bool m_log_open;  //log open or not
     mutex m_mtx;
 };
 
 #define LOG_BASE(level, format, ...) \
     do {\
-        Log* log = Log::Instance();\
-        if (log->IsOpen() && log->GetLevel() <= level) {\
-            log->write(level, format, ##__VA_ARGS__); \
+        Log* log = Log::getInstance();\
+        if (log->isOpen() && log->getLevel() <= level) {\
+            log->writeLog(level, format, ##__VA_ARGS__); \
         }\
     } while(0);
 
