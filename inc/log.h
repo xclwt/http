@@ -6,17 +6,19 @@
 #define HTTP_LOG_H
 
 #include <mutex>
+#include <pthread.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <cstdarg>
 #include <memory>
+#include <string>
 #include "queue.h"
 
-#define LOG_DEBUG   0
-#define LOG_INFO    1
-#define LOG_WARNING 2
-#define LOG_ERROR   3
+#define LEVEL_DEBUG   0
+#define LEVEL_INFO    1
+#define LEVEL_WARN    2
+#define LEVEL_ERROR   3
 
 #define DEFAULT_LOG_BUF 8192
 #define DEFAULT_MAX_LINE 50000
@@ -30,7 +32,7 @@ using namespace std;
 
 class Log{
 public:
-    static void init(int level, int maxLineNum, int maxQueueSize, int logBufSize, const char *filepath, const char *filename);
+    void init(int level, int maxLineNum, int maxQueueSize, int logBufSize, const char *filepath, const char *filename);
 
     int getLevel();
 
@@ -81,9 +83,9 @@ private:
         }\
     } while(0);
 
-#define LOG_DEBUG(format, ...) do {LOG_BASE(0, format, ##__VA_ARGS__)} while(0);
-#define LOG_INFO(format, ...) do {LOG_BASE(1, format, ##__VA_ARGS__)} while(0);
-#define LOG_WARN(format, ...) do {LOG_BASE(2, format, ##__VA_ARGS__)} while(0);
-#define LOG_ERROR(format, ...) do {LOG_BASE(3, format, ##__VA_ARGS__)} while(0);
+#define LOG_DEBUG(format, ...) do {LOG_BASE(LEVEL_DEBUG, format, ##__VA_ARGS__)} while(0);
+#define LOG_INFO(format, ...) do {LOG_BASE(LEVEL_INFO, format, ##__VA_ARGS__)} while(0);
+#define LOG_WARN(format, ...) do {LOG_BASE(LEVEL_WARN, format, ##__VA_ARGS__)} while(0);
+#define LOG_ERROR(format, ...) do {LOG_BASE(LEVEL_ERROR, format, ##__VA_ARGS__)} while(0);
 
 #endif

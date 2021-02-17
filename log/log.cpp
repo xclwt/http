@@ -7,7 +7,6 @@
 Log::Log(){
     m_log_open = false;
     m_log_idx = 0;
-    m_max_queue_size = 0;
     m_isAsync = false;
     m_fd = -1;
     m_logQueue = nullptr;
@@ -24,7 +23,7 @@ void Log::openNewLog(int oflag, const char *format, ...){
     char entireName[LOG_NAME_LEN];
 
     va_start(args, format);
-    snprintf(entireName, LOG_NAME_LEN - 1, format, args);
+    vsnprintf(entireName, LOG_NAME_LEN - 1, format, args);
     va_end(args);
 
     if (m_fd != -1)
@@ -35,19 +34,22 @@ void Log::openNewLog(int oflag, const char *format, ...){
         mkdir(m_filepath, 0777);
         m_fd = open(entireName, oflag);
     }
+    printf("%d\n", m_fd);
 }
 
 [[noreturn]] void Log::asyncWrite(){
     string oneLog;
     while (true){
         m_logQueue->pop(oneLog);
-        lock_guard<mutex> locker(m_mtx);
+        lock_guard<mutex> locker(m_mtx);\
         write(m_fd, oneLog.c_str(), oneLog.size());
+        //printf("%d\n", errno);
     }
 }
 
 void Log::init(int level, int maxLineNum, int maxQueueSize, int logBufSize, const char *filepath, const char *suffix){
     m_level = level;
+    m_line_cnt = maxLineNum;
     m_max_line_num = maxLineNum;
     m_log_open = true;
     m_logBufSize = logBufSize;
@@ -66,9 +68,6 @@ void Log::init(int level, int maxLineNum, int maxQueueSize, int logBufSize, cons
     m_suffix = suffix;
 
     m_today = time.tm_mday;
-
-    openNewLog(O_APPEND | O_CREAT, "%s/%04d%02d%02d-%d%s",
-               m_filepath, time.tm_year + 1900, time.tm_mon + 1, time.tm_mday, ++m_log_idx, m_suffix);
 }
 
 int Log::getLevel(){
@@ -90,19 +89,17 @@ void Log::writeLog(int level, const char *format, ...){
     if(time.tm_mday != m_today || m_line_cnt == m_max_line_num){
         if (time.tm_mday != m_today){
             m_log_idx = 0;
-            openNewLog(O_APPEND | O_CREAT, "%s/%04d%02d%02d-%d%s",
-                       m_filepath, time.tm_year + 1900, time.tm_mon + 1, time.tm_mday, ++m_log_idx, m_suffix);
+            openNewLog(O_APPEND | O_CREAT | O_RDWR, "%s/%04d%02d%02d-%d%s",
+                       m_filepath, time.tm_year + 1900, time.tm_mon + 1, time.tm_mday, m_log_idx++, m_suffix);
         }else{
-            openNewLog(O_APPEND | O_CREAT, "%s/%04d%02d%02d-%d%s",
-                       m_filepath, time.tm_year + 1900, time.tm_mon + 1, time.tm_mday, ++m_log_idx, m_suffix);
+            openNewLog(O_APPEND | O_CREAT | O_RDWR, "%s/%04d%02d%02d-%d%s",
+                       m_filepath, time.tm_year + 1900, time.tm_mon + 1, time.tm_mday, m_log_idx++, m_suffix);
         }
 
         m_line_cnt = 0;
     }
-    locker.unlock();
 
-
-    locker.lock();
+    ++m_line_cnt;
 
     int n = snprintf(m_logBuffer, 48, "%d-%02d-%02d %02d:%02d:%02d.%06ld %s ",
                      time.tm_year + 1900, time.tm_mon + 1, time.tm_mday,
@@ -126,6 +123,7 @@ void Log::writeLog(int level, const char *format, ...){
     {
         m_mtx.lock();
         write(m_fd, log_str.c_str(), log_str.size());
+        //printf("%d\n", errno);
         m_mtx.unlock();
     }
 }

@@ -15,19 +15,66 @@ using namespace std;
 template<class T>
 class BlockQueue{
 public:
-    explicit BlockQueue(int max_size);
+    explicit BlockQueue(int max_size){
+        assert(max_size > 0);
 
-    ~BlockQueue();
+        m_max_size = max_size;
+        m_size = 0;
+        m_front = -1;
+        m_back = -1;
+        m_array = unique_ptr<string[]>(new string[m_max_size]);
+    }
 
-    bool full();
+    ~BlockQueue(){
+    }
 
-    bool empty();
+    bool full(){
+        if (m_size >= m_max_size){
+            return true;
+        }
 
-    int size();
+        return false;
+    }
 
-    void push(const T &item);
+    bool empty(){
+        if (m_size == 0){
+            return true;
+        }
 
-    void pop(T &item);
+        return false;
+    }
+
+    int size(){
+        return m_size;
+    }
+
+    void push(const T &item){
+        m_locker.lock();
+
+        while (m_size == m_max_size){
+            m_cond_producer.wait(m_locker.get());
+        }
+
+        m_back = (m_back + 1) % m_max_size;
+        m_array[m_back] = item;
+        m_size++;
+        m_cond_consumer.signal();
+        m_locker.unlock();
+    }
+
+    void pop(T &item){
+        m_locker.lock();
+
+        while (m_size == 0){
+            m_cond_consumer.wait(m_locker.get());
+        }
+
+        m_front = (m_front + 1) % m_max_size;
+        item = m_array[m_front];
+        m_size--;
+        m_cond_producer.signal();
+        m_locker.unlock();
+    }
 
 private:
     unique_ptr<string[]> m_array;
