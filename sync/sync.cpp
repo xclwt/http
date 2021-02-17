@@ -41,7 +41,7 @@ bool Locker::unlock(){
 }
 
 pthread_mutex_t* Locker::get(){
-    return &mutex
+    return &mutex;
 }
 
 CondVar::CondVar(){

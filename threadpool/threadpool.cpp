@@ -4,10 +4,7 @@
 
 #include <mutex>
 #include <condition_variable>
-#include <queue>
-#include <thread>
-#include <functional>
-#include <cassert>
+
 #include "threadpool.h"
 
 
@@ -41,10 +38,3 @@ ThreadPool::~ThreadPool(){
     m_cond.broadcast();
 }
 
-template<class T>
-void ThreadPool::AddTask(T &&task){
-    m_locker.lock();
-    taskQueue.emplace(std::forward<T>(task));
-    m_locker.unlock();
-    m_cond.broadcast();
-}

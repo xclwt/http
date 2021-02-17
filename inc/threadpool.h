@@ -8,8 +8,10 @@
 #define THREADPOOL_H
 
 #include <vector>
-#include <pthread.h>
+#include <thread>
 #include <queue>
+#include <functional>
+#include <cassert>
 #include "sync.h"
 
 using namespace std;
@@ -22,7 +24,12 @@ public:
     ~ThreadPool();
 
     template<class T>
-    void AddTask(T&& task);
+    void AddTask(T&& task){
+        m_locker.lock();
+        taskQueue.emplace(std::forward<T>(task));
+        m_locker.unlock();
+        m_cond.broadcast();
+    }
 
 private:
     bool isClosed;
