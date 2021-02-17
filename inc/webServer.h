@@ -5,19 +5,23 @@
 #ifndef HTTP_WEBSERVER_H
 #define HTTP_WEBSERVER_H
 
-#include <stdint.h>
+#include <cstdint>
 #include <memory>
 #include <cstring>
+#include <csignal>
+#include <functional>
 #include "httpconn.h"
 #include "timer.h"
 #include "threadpool.h"
 #include "epoller.h"
 #include "log.h"
+#include "utils.h"
 
 using namespace std;
 
-#define MAX_FD 65536
+#define MAX_FD 65536    /* theoretically the value can be set up to 2^63 - 1 */
 #define PATH_LEN 256
+#define TIMESLOT 5
 
 class WebServer {
 public:
@@ -38,31 +42,44 @@ private:
 
     void dealListen();
 
-    void dealWrite(HttpConn* client);
+    void dealWrite(int sockFd);
 
-    void dealRead(HttpConn* client);
+    void dealRead(int sockFd);
 
-    void sendError(int fd, const char*info);
+    bool dealSig(bool &timeout);
 
-    void extentTime(HttpConn* client);
+    void dealTimer(int sockFd);
+
+    void addTimer(int sockFd, sockaddr_in addr);
+
+    void adjustTimer(int sockFd);
 
     void closeConn(HttpConn* client);
 
-    void onRead(HttpConn* client);
+    void readTask(HttpConn* client);
 
-    void onWrite(HttpConn* client);
+    void writeTask(HttpConn* client);
 
-    void onProcess(HttpConn* client);
+    void process(HttpConn* client);
+
+    void timeHandler();
+
+    static void sendError(int fd, const char*info);
 
     static int setNonblock(int fd);
 
-    static int addsig(int sig);
+    static void addsig(int sig, void(handler)(int), bool restart = true);
+
+    static void sig_handler(int sig);
+
+    static int  m_pipeFd[2];
 
     int m_port;
     bool m_optLinger;
     int m_timeout;
     bool m_isClose;
     int m_listenFd;
+
     char m_rootDir[PATH_LEN];
 
     int m_trigMode;

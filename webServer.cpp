@@ -7,10 +7,10 @@
 WebServer::WebServer(int port, int trigMode, int timeout, bool optLinger,
                      int threadNum, bool openLog, int logLevel, int logQueueSize):
                      m_port(port), m_timeout(timeout), m_optLinger(optLinger),
-                     m_trigMode(trigMode), m_timeWheel(new TimeWheel()),
+                     m_trigMode(trigMode), m_timeWheel(new TimeWheel(TIMESLOT)),
                      m_usersTimer(new ClientData[MAX_FD]),
                      m_threadpool(new ThreadPool(threadNum)),
-                     m_epoller(new Epoller()), m_users(new HttpConn[MAX_FD]){
+                     m_epoller(Epoller::getEpollInstance()), m_users(new HttpConn[MAX_FD]){
 
     getcwd(m_rootDir, PATH_LEN);
     strncat(m_rootDir, "/resources/", 12);
@@ -38,11 +38,37 @@ WebServer::~WebServer(){
 }
 
 void WebServer::eventLoop(){
+    bool timeout = false;
+
     if (!m_isClose){
         LOG_INFO("Server Start");
     }
     while (!m_isClose){
+        int num = m_epoller->wait(-1);
 
+        for (int i = 0; i < num; ++i){
+            int sockFd = m_epoller->getEpollFd(i);
+            uint32_t events = m_epoller->getEpollEvents(i);
+
+            if (sockFd == m_listenFd){
+                dealListen();
+            }else if (events & (EPOLLRDHUP  | EPOLLHUP | EPOLLERR)){
+                dealTimer(sockFd);
+                /* ? */
+            }else if (sockFd == m_pipeFd[0] && (events & EPOLLIN)){
+                dealSig(timeout);
+            }else if (events & EPOLLIN){
+                dealRead(sockFd);
+            }else if (events & EPOLLOUT){
+                dealWrite(sockFd);
+            }
+        }
+
+        if (timeout){
+            timeHandler();
+            LOG_INFO("timer tick");
+            timeout = false;
+        }
     }
 }
 
@@ -106,6 +132,27 @@ bool WebServer::eventListen(){
 
     setNonblock(m_listenFd);
     LOG_INFO("Server Listen Port: %d", m_port);
+
+    ret = socketpair(PF_UNIX, SOCK_STREAM, 0, m_pipeFd);
+    if (ret < 0){
+        LOG_ERROR("fail to init signal pipe");
+        return false;
+    }
+
+    setNonblock(m_pipeFd[1]);
+
+    ret = m_epoller->addfd(m_pipeFd[0], EPOLLIN | EPOLLET);
+    if (ret < 0){
+        LOG_ERROR("fail to add sig pipe event to epoll");
+        return false;
+    }
+
+    addsig(SIGPIPE, SIG_IGN);
+    addsig(SIGALRM, sig_handler, false);
+    addsig(SIGTERM, sig_handler, false);
+
+    alarm(TIMESLOT);
+
     return true;
 }
 
@@ -118,5 +165,148 @@ void WebServer::initTrigMode(){
     }
 }
 
+void WebServer::addClient(int fd, sockaddr_in addr){
 
+}
 
+void WebServer::dealListen(){
+    sockaddr_in addr;
+    int addrlen = sizeof(addr);
+
+    do {
+        int fd = accept(m_listenFd, (sockaddr *)&addr, (socklen_t *)&addrlen);
+
+        if (fd < 0)
+            return;
+        else if (HttpConn::m_user_cnt >= MAX_FD){
+            sendError(fd, "Server is busy!");
+            LOG_WARN("Http connections is full!");
+            return;
+        }
+
+        addTimer(fd, addr);
+        addClient(fd, addr);
+        LOG_INFO("connection %d established", fd);
+    } while (m_listenEvent & EPOLLET);
+}
+
+bool WebServer::dealSig(bool &timeout){
+    char sigBuf[1024];
+    int ret = recv(m_pipeFd[0], sigBuf, sizeof(sigBuf), 0);
+
+    if(ret <= 0)
+        return false;
+    else{
+        for (int i = 0; i < ret; ++i){
+            switch (sigBuf[i]) {
+                case SIGALRM:
+                    timeout = true;
+                    break;
+                case SIGTERM:
+                    m_isClose = true;
+                    break;
+            }
+        }
+    }
+}
+
+void WebServer::dealRead(int sockFd){
+    adjustTimer(sockFd);
+    m_threadpool->AddTask(std::bind(&WebServer::readTask, this, m_users[sockFd]));
+}
+
+void WebServer::dealWrite(int sockFd){
+    adjustTimer(sockFd);
+    m_threadpool->AddTask(std::bind(&WebServer::writeTask, this, m_users[sockFd]));
+}
+
+void WebServer::dealTimer(int sockFd){
+    Timer *timer = m_usersTimer[sockFd].timer;
+
+    if (timer){
+        timer->cb_func(&m_usersTimer[sockFd]);
+        m_timeWheel->del_timer(timer);
+    }
+    LOG_INFO("close sockFd: %d", sockFd);
+}
+
+void WebServer::addTimer(int sockFd, sockaddr_in addr){
+    m_usersTimer[sockFd].address = addr;
+    m_usersTimer[sockFd].sockfd = sockFd;
+
+    Timer *timer = m_timeWheel->add_timer(120 * TIMESLOT);
+    timer->user_data = &m_usersTimer[sockFd];
+    timer->cb_func = cb_func;
+
+    m_usersTimer[sockFd].timer = timer;
+}
+
+void WebServer::adjustTimer(int sockFd){
+    Timer *timer = m_usersTimer[sockFd].timer;
+    m_timeWheel->adjust_timer(timer, 12 * TIMESLOT);
+}
+
+void WebServer::closeConn(HttpConn *client){
+
+}
+
+void WebServer::readTask(HttpConn *client){
+    int readErrno = 0;
+    int ret = client->read(readErrno);
+
+    if (ret <= 0 && readErrno != EAGAIN){
+        closeConn(client);
+        return;
+    }
+
+    process(client);
+}
+
+void WebServer::writeTask(HttpConn *client){
+
+}
+
+void WebServer::process(HttpConn *client){
+
+}
+
+void WebServer::timeHandler(){
+    m_timeWheel->tick();
+    alarm(TIMESLOT);
+}
+
+void WebServer::sendError(int fd, const char *info){
+    int ret = send(fd, info, strlen(info), 0);
+
+    if (ret < 0){
+        LOG_INFO("fail to send error to client[%d]", fd);
+    }
+
+    close(fd);
+}
+
+int WebServer::setNonblock(int fd){
+    int old_option = fcntl(fd, F_GETFL);
+    int new_option = old_option | O_NONBLOCK;
+    fcntl(fd, F_SETFL, new_option);
+    return old_option;
+}
+
+void WebServer::addsig(int sig, void (*handler)(int), bool restart){
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = handler;
+
+    if (restart)
+        sa.sa_flags |= SA_RESTART;
+
+    sigfillset(&sa.sa_mask);
+    assert(sigaction(sig, &sa, nullptr) != -1);
+}
+
+void WebServer::sig_handler(int sig){
+    int save_errno = errno;
+    int msg = sig;
+    send(m_pipeFd[1], (char*)&msg, 1, 0 );
+    errno = save_errno;
+}
