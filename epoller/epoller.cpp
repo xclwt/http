@@ -4,6 +4,11 @@
 
 #include "epoller.h"
 
+Epoller* Epoller::getEpollInstance(){
+    static Epoller epoller;
+    return &epoller;
+}
+
 Epoller::Epoller(): m_epollFd(epoll_create(1)){
     assert(m_epollFd > 0);
 }

@@ -13,9 +13,7 @@
 
 class Epoller{
 public:
-    Epoller();
-
-    ~Epoller();
+    static Epoller* getEpollInstance();
 
     bool addfd(int fd, uint32_t events);
 
@@ -30,6 +28,10 @@ public:
     uint32_t getEpollEvents(int i);
 
 private:
+    Epoller();
+
+    ~Epoller();
+
     int m_epollFd;
 
     epoll_event m_events[MAX_EPOLL_EVENTS];
