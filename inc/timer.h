@@ -6,8 +6,11 @@
 #define TIMER_H
 
 #include <ctime>
+#include <unistd.h>
 #include <netinet/in.h>
 #include <cstdio>
+#include "httpconn.h"
+#include "epoller.h"
 
 #define BUFFER_SIZE 64
 
@@ -16,7 +19,6 @@ class Timer;
 struct ClientData{
     sockaddr_in address;
     int sockfd;
-    char buf[BUFFER_SIZE];
     Timer* timer;
 };
 
@@ -62,6 +64,8 @@ public:
 
     Timer* add_timer(int timeout);
 
+    void del_timer(Timer *timer);
+
     void adjust_timer(Timer *timer, int timeout);
 
     void tick();
@@ -72,5 +76,7 @@ private:
     RotationNode* slots[N];
     int cur_slot;
 };
+
+void cb_func(ClientData *user_data);
 
 #endif

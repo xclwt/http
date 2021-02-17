@@ -136,3 +136,11 @@ void TimeWheel::tick(){
 
     cur_slot = ++cur_slot % N;
 }
+
+void cb_func(ClientData *user_data)
+{
+    Epoller::getEpollInstance()->removefd(user_data->sockfd);
+    //assert(user_data);
+    close(user_data->sockfd);
+    HttpConn::m_user_cnt--;
+}
