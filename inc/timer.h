@@ -58,7 +58,7 @@ class TimeWheel{
 public:
     TimeWheel();
 
-    TimeWheel(int accuracy);
+    explicit TimeWheel(int accuracy);
 
     ~TimeWheel();
 

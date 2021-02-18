@@ -97,6 +97,7 @@ Timer* TimeWheel::add_timer(int timeout){
             tmp->prev = newRotation;
         }else if (rotation == tmp->rotation){
             tmp->addTimer(newTimer);
+            break;
         }
         else{
             if (tmp->next){
@@ -113,9 +114,21 @@ Timer* TimeWheel::add_timer(int timeout){
     return newTimer;
 }
 
+void TimeWheel::del_timer(Timer *timer){
+    if (timer->prev)
+        timer->prev->next = timer->next;
+    else
+        timer->rot->start = timer->next;
+
+    delete timer;
+}
+
 void TimeWheel::adjust_timer(Timer *timer, int timeout){
-    //RotationNode *rotationNode = timer->rot;
-    //int slot = rotationNode->timeSlot;
+    Timer *newtimer = add_timer(timeout);
+    newtimer->user_data = timer->user_data;
+    newtimer->cb_func = timer->cb_func;
+    newtimer->user_data->timer = newtimer;
+    del_timer(timer);
 }
 
 void TimeWheel::tick(){
