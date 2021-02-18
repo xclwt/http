@@ -40,7 +40,7 @@ public:
 
     void writeLog(int level, const char *format, ...);
 
-    bool isOpen();
+    bool isOpen() const;
 
     static Log *getInstance();
 

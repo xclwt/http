@@ -9,6 +9,8 @@
 
 #include <vector>
 #include <thread>
+#include <mutex>
+#include <condition_variable>
 #include <queue>
 #include <functional>
 #include <cassert>
@@ -25,16 +27,16 @@ public:
 
     template<class T>
     void AddTask(T&& task){
-        m_locker.lock();
+        unique_lock<mutex> locker(m_locker);
         taskQueue.emplace(std::forward<T>(task));
-        m_locker.unlock();
-        m_cond.broadcast();
+        locker.unlock();
+        m_cond.notify_all();
     }
 
 private:
-    bool isClosed;
-    Locker m_locker;
-    CondVar m_cond;
+    bool m_isClosed;
+    mutex m_locker;
+    condition_variable m_cond;
     queue<std::function<void()>> taskQueue;
 };
 

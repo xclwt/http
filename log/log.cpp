@@ -16,6 +16,8 @@ Log::~Log(){
     if (m_fd != -1){
         close(m_fd);
     }
+
+    m_log_open = false;
 }
 
 void Log::openNewLog(int oflag, const char *format, ...){
@@ -34,7 +36,6 @@ void Log::openNewLog(int oflag, const char *format, ...){
         mkdir(m_filepath, 0777);
         m_fd = open(entireName, oflag);
     }
-    printf("%d\n", m_fd);
 }
 
 [[noreturn]] void Log::asyncWrite(){
@@ -43,7 +44,6 @@ void Log::openNewLog(int oflag, const char *format, ...){
         m_logQueue->pop(oneLog);
         lock_guard<mutex> locker(m_mtx);\
         write(m_fd, oneLog.c_str(), oneLog.size());
-        //printf("%d\n", errno);
     }
 }
 
@@ -55,7 +55,7 @@ void Log::init(int level, int maxLineNum, int maxQueueSize, int logBufSize, cons
     m_logBufSize = logBufSize;
     m_logBuffer = new char[logBufSize];
 
-    if (maxQueueSize > 0){
+    if (maxQueueSize > 0 && !m_isAsync){
         m_isAsync = true;
         m_logQueue = unique_ptr<BlockQueue<string>>(new BlockQueue<string>(maxQueueSize));
         pthread_create(&m_async_write_thread, nullptr, logWriteThread, nullptr);
@@ -121,14 +121,13 @@ void Log::writeLog(int level, const char *format, ...){
     }
     else
     {
-        m_mtx.lock();
+        locker.lock();
         write(m_fd, log_str.c_str(), log_str.size());
-        //printf("%d\n", errno);
-        m_mtx.unlock();
+        locker.unlock();
     }
 }
 
-bool Log::isOpen(){
+bool Log::isOpen() const{
     return m_log_open;
 }
 
