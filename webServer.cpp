@@ -4,12 +4,14 @@
 
 #include "webServer.h"
 
+int WebServer::m_pipeFd[2];
+
 WebServer::WebServer(int port, int trigMode, int timeout, bool optLinger,
                      int threadNum, bool openLog, int logLevel, int logQueueSize):
                      m_port(port), m_timeout(timeout), m_optLinger(optLinger),
                      m_trigMode(trigMode), m_timeWheel(new TimeWheel(TIMESLOT)),
                      m_usersTimer(new ClientData[MAX_FD]),
-                     m_threadpool(new ThreadPool(threadNum)),
+                     m_threadpool(new ThreadPool(8)),
                      m_epoller(Epoller::getEpollInstance()), m_users(new HttpConn[MAX_FD]){
 
     getcwd(m_rootDir, PATH_LEN);
@@ -20,7 +22,7 @@ WebServer::WebServer(int port, int trigMode, int timeout, bool optLinger,
     initTrigMode();
 
     if (openLog){
-        Log::init(logLevel, DEFAULT_MAX_LINE, logQueueSize, DEFAULT_LOG_BUF, "./log", "log");
+        Log::getInstance()->init(logLevel, DEFAULT_MAX_LINE, logQueueSize, DEFAULT_LOG_BUF, "./log", "log");
     }
 
     if(!eventListen()) m_isClose = true;
@@ -158,15 +160,27 @@ bool WebServer::eventListen(){
 
 void WebServer::initTrigMode(){
     m_listenEvent = EPOLLRDHUP | EPOLLIN;
+    m_connEvent = EPOLLRDHUP | EPOLLONESHOT;
 
-    if (m_trigMode == 0);
-    else{
-        m_listenEvent |= EPOLLET;
+    if (m_trigMode == 0){
     }
+    else if (m_trigMode == 1){
+        m_listenEvent |= EPOLLET;
+    }else if (m_trigMode == 2){
+        m_connEvent |= EPOLLET;
+    }else{
+        m_listenEvent |= EPOLLET;
+        m_connEvent |= EPOLLET;
+    }
+
+    HttpConn::m_ET = m_connEvent & EPOLLET;
 }
 
 void WebServer::addClient(int fd, sockaddr_in addr){
-
+    m_users[fd].init(fd, addr, m_timeout);
+    m_epoller->addfd(fd, m_connEvent | EPOLLIN);
+    setNonblock(fd);
+    LOG_INFO("Client[%d] connected!", m_users[fd].getFd());
 }
 
 void WebServer::dealListen(){
@@ -184,7 +198,9 @@ void WebServer::dealListen(){
             return;
         }
 
-        addTimer(fd, addr);
+        if (m_timeout > 0)
+            addTimer(fd, addr);
+
         addClient(fd, addr);
         LOG_INFO("connection %d established", fd);
     } while (m_listenEvent & EPOLLET);
@@ -208,16 +224,18 @@ bool WebServer::dealSig(bool &timeout){
             }
         }
     }
+
+    return true;
 }
 
 void WebServer::dealRead(int sockFd){
     adjustTimer(sockFd);
-    m_threadpool->AddTask(std::bind(&WebServer::readTask, this, m_users[sockFd]));
+    m_threadpool->AddTask(std::bind(&WebServer::readTask, this, &m_users[sockFd]));
 }
 
 void WebServer::dealWrite(int sockFd){
     adjustTimer(sockFd);
-    m_threadpool->AddTask(std::bind(&WebServer::writeTask, this, m_users[sockFd]));
+    m_threadpool->AddTask(std::bind(&WebServer::writeTask, this, &m_users[sockFd]));
 }
 
 void WebServer::dealTimer(int sockFd){
@@ -234,7 +252,7 @@ void WebServer::addTimer(int sockFd, sockaddr_in addr){
     m_usersTimer[sockFd].address = addr;
     m_usersTimer[sockFd].sockfd = sockFd;
 
-    Timer *timer = m_timeWheel->add_timer(120 * TIMESLOT);
+    Timer *timer = m_timeWheel->add_timer(m_timeout);
     timer->user_data = &m_usersTimer[sockFd];
     timer->cb_func = cb_func;
 
@@ -243,18 +261,16 @@ void WebServer::addTimer(int sockFd, sockaddr_in addr){
 
 void WebServer::adjustTimer(int sockFd){
     Timer *timer = m_usersTimer[sockFd].timer;
-    m_timeWheel->adjust_timer(timer, 12 * TIMESLOT);
+    m_timeWheel->adjust_timer(timer, m_timeout);
 }
 
 void WebServer::closeConn(HttpConn *client){
-
+    m_epoller->removefd(client->getFd());
+    client->closeClient();
 }
 
 void WebServer::readTask(HttpConn *client){
-    int readErrno = 0;
-    int ret = client->read(readErrno);
-
-    if (ret <= 0 && readErrno != EAGAIN){
+    if (!client->read()){
         closeConn(client);
         return;
     }
@@ -263,11 +279,30 @@ void WebServer::readTask(HttpConn *client){
 }
 
 void WebServer::writeTask(HttpConn *client){
+    int writeErrno = 0;
+    int ret = client->write(writeErrno);
 
+    if(client->bytesToWrite() == 0) {
+        if(client->isKeepAlive()) {
+            process(client);
+            return;
+        }
+    }else if(ret < 0) {
+        if(writeErrno == EAGAIN) {
+            m_epoller->modfd(client->getFd(), m_connEvent | EPOLLOUT);
+            return;
+        }
+    }
+
+    closeConn(client);
 }
 
 void WebServer::process(HttpConn *client){
-
+    if (client->process()){
+        m_epoller->modfd(client->getFd(), m_connEvent | EPOLLOUT);
+    }else{
+        m_epoller->modfd(client->getFd(), m_connEvent | EPOLLIN);
+    }
 }
 
 void WebServer::timeHandler(){

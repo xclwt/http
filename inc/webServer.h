@@ -10,12 +10,11 @@
 #include <cstring>
 #include <csignal>
 #include <functional>
-#include "httpconn.h"
+#include "httpConn.h"
 #include "timer.h"
 #include "threadpool.h"
 #include "epoller.h"
 #include "log.h"
-#include "utils.h"
 
 using namespace std;
 
@@ -54,7 +53,7 @@ private:
 
     void adjustTimer(int sockFd);
 
-    void closeConn(HttpConn* client);
+    void closeConn(HttpConn *client);
 
     void readTask(HttpConn* client);
 
@@ -84,11 +83,12 @@ private:
 
     int m_trigMode;
     uint32_t m_listenEvent;
+    uint32_t m_connEvent;
 
+    Epoller *m_epoller;
     unique_ptr<TimeWheel> m_timeWheel;
     unique_ptr<ClientData[]> m_usersTimer;
     unique_ptr<ThreadPool> m_threadpool;
-    unique_ptr<Epoller> m_epoller;
     unique_ptr<HttpConn[]> m_users;
 };
 
