@@ -12,7 +12,7 @@ HttpConn::~HttpConn(){
         m_isClose = true;
         --m_user_cnt;
         close(m_fd);
-        LOG_INFO("client[%d](%s: %d) disconnect!, user count: %d", m_fd, getIP(), getPort(), m_user_cnt);
+        LOG_INFO("client[%d](%s: %d) terminated!, user count: %d", m_fd, getIP(), getPort(), m_user_cnt);
     }
 }
 
@@ -149,14 +149,16 @@ void HttpConn::requestInit(){
 }
 
 bool HttpConn::parse(){
+    LOG_DEBUG("Connection %d enter parse", getFd());
     const char CRLF[] = "\r\n";
     string line;
 
-    if(readBufReadable()){
+    if(!readBufReadable()){
         return false;
     }
 
     while (readBufReadable() && m_state != FINISH){
+        LOG_DEBUG("Connection %d enter parse loop", getFd());
         const char *lineEnd = search(m_read_buf + m_readbuf_r_idx,
                                      m_read_buf + m_readbuf_w_idx, CRLF, CRLF + 2);
 
@@ -164,11 +166,11 @@ bool HttpConn::parse(){
             if (m_state != ERROR && lineEnd == m_read_buf + m_readbuf_w_idx)
                 break;
 
-            m_readbuf_r_idx += (lineEnd + 2 - m_read_buf) + m_readbuf_r_idx;
             line = string(m_read_buf + m_readbuf_r_idx, lineEnd - (m_read_buf + m_readbuf_r_idx));
+            m_readbuf_r_idx += (lineEnd + 2 - m_read_buf) + m_readbuf_r_idx;
         }
 
-
+        LOG_DEBUG("Connection %d enter state machine", getFd());
         switch (m_state){
             case REQUESTLINE:
                 if (!parseRequestLine(line)){
@@ -199,7 +201,7 @@ bool HttpConn::parse(){
         }
     }
 
-    LOG_DEBUG("[%s], [%s], [%s]", m_method.c_str(), m_path.c_str(), m_version.c_str());
+    LOG_DEBUG("parse:[%s], [%s], [%s]", m_method.c_str(), m_path.c_str(), m_version.c_str());
     m_responseCode = 200;
     return true;
 }
@@ -221,6 +223,7 @@ bool HttpConn::parseRequestLine(const string &line){
 }
 
 void HttpConn::parseHeader(const string &line){
+    LOG_DEBUG("Connection %d enter parse reuqest line", getFd());
     regex pattern("^([^:]*): *(.*)$");
     smatch subMatch;
 
@@ -235,11 +238,11 @@ void HttpConn::parseHeader(const string &line){
 }
 
 void HttpConn::parseContent(const string &line){
-
+    LOG_DEBUG("Connection %d enter parse content", getFd());
 }
 
 void HttpConn::parsePath(){
-
+    LOG_DEBUG("Connection %d enter parse path", getFd());
 }
 
 bool HttpConn::isKeepAlive(){
@@ -305,6 +308,7 @@ void HttpConn::addContent(){
     int fd = open((m_rootDir + m_path).c_str(), O_RDONLY);
 
     if (fd < 0){
+        LOG_DEBUG("Connection %d File Not Found", getFd());
         addError("File Not Found");
         return;
     }
@@ -312,6 +316,7 @@ void HttpConn::addContent(){
     m_file = (char *)mmap(0, m_fileStat.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
 
     if (m_file == MAP_FAILED){
+        LOG_DEBUG("Connection %d File Not Found", getFd());
         addError("File Not Found");
         return;
     }

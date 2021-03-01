@@ -115,10 +115,15 @@ Timer* TimeWheel::add_timer(int timeout){
 }
 
 void TimeWheel::del_timer(Timer *timer){
-    if (timer->prev)
+    if (timer->next)
+        timer->next->prev = timer->prev;
+
+    if (timer->prev){
         timer->prev->next = timer->next;
-    else
+    }else
         timer->rot->start = timer->next;
+
+
 
     delete timer;
 }

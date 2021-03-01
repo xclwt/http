@@ -15,14 +15,14 @@ WebServer::WebServer(int port, int trigMode, int timeout, bool optLinger,
                      m_epoller(Epoller::getEpollInstance()), m_users(new HttpConn[MAX_FD]){
 
     getcwd(m_rootDir, PATH_LEN);
-    strncat(m_rootDir, "/resources/", 12);
+    strncat(m_rootDir, "../resources/", 12);
     HttpConn::m_rootDir = m_rootDir;
     HttpConn::m_user_cnt = 0;
 
     initTrigMode();
 
     if (openLog){
-        Log::getInstance()->init(logLevel, DEFAULT_MAX_LINE, logQueueSize, DEFAULT_LOG_BUF, "./log", "log");
+        Log::getInstance()->init(logLevel, DEFAULT_MAX_LINE, logQueueSize, DEFAULT_LOG_BUF, "./log", ".log");
     }
 
     if(!eventListen()) m_isClose = true;
@@ -240,6 +240,7 @@ void WebServer::dealWrite(int sockFd){
 
 void WebServer::dealTimer(int sockFd){
     Timer *timer = m_usersTimer[sockFd].timer;
+    m_usersTimer[sockFd].timer = nullptr;
 
     if (timer){
         timer->cb_func(&m_usersTimer[sockFd]);
@@ -257,6 +258,8 @@ void WebServer::addTimer(int sockFd, sockaddr_in addr){
     timer->cb_func = cb_func;
 
     m_usersTimer[sockFd].timer = timer;
+
+    LOG_INFO("Connection %d add timer", sockFd);
 }
 
 void WebServer::adjustTimer(int sockFd){
