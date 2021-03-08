@@ -28,26 +28,25 @@ void HttpConn::init(int sockfd, sockaddr_in addr, int timeout){
     m_isClose = false;
 }
 
-bool HttpConn::read(){
+int HttpConn::read(int &saveErrno){
     int ret;
 
     do{
         ret = recv(m_fd, m_read_buf + m_readbuf_w_idx, READ_BUF_SIZE - m_readbuf_w_idx, 0);
 
-        if (ret == -1){
-            if (errno == EAGAIN || errno == EWOULDBLOCK){
-                break;
+        if (ret == -1) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                saveErrno = errno;
             }
-
-            return false;
-        }else if (ret == 0){
-            return false;
+            break;
+        }else if(ret == 0){
+            return 0;
         }
 
-        m_readbuf_w_idx += ret;
+        m_readbuf_w_idx += ret > 0 ? ret : 0;
     } while (m_ET);
 
-    return true;
+    return ret;
 }
 
 int HttpConn::write(int &saveErrno){

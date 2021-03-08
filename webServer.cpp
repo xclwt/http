@@ -273,7 +273,8 @@ void WebServer::closeConn(HttpConn *client){
 }
 
 void WebServer::readTask(HttpConn *client){
-    if (!client->read()){
+    int readErrno = 0;
+    if (client->read(readErrno) == -1 && !(readErrno == EAGAIN || readErrno == EWOULDBLOCK)){
         closeConn(client);
         return;
     }

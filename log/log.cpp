@@ -31,10 +31,10 @@ void Log::openNewLog(int oflag, const char *format, ...){
     if (m_fd != -1)
         close(m_fd);
 
-    m_fd = open(entireName, oflag);
+    m_fd = open(entireName, oflag, 0777);
     if (m_fd == -1){
         mkdir(m_filepath, 0777);
-        m_fd = open(entireName, oflag);
+        m_fd = open(entireName, oflag, 0777);
     }
 }
 
@@ -42,7 +42,7 @@ void Log::openNewLog(int oflag, const char *format, ...){
     string oneLog;
     while (true){
         m_logQueue->pop(oneLog);
-        lock_guard<mutex> locker(m_mtx);\
+        lock_guard<mutex> locker(m_mtx);
         write(m_fd, oneLog.c_str(), oneLog.size());
     }
 }

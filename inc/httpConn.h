@@ -77,7 +77,7 @@ public:
 
     void init(int sockfd, sockaddr_in addr, int timeout);
 
-    bool read();
+    int read(int &saveErrno);
 
     int write(int &saveErrno);
 
