@@ -4,6 +4,8 @@
 
 #include "webServer.h"
 
+int accept_cnt = 0;
+
 int WebServer::m_pipeFd[2];
 
 WebServer::WebServer(int port, int trigMode, int timeout, bool optLinger,
@@ -72,6 +74,8 @@ void WebServer::eventLoop(){
             timeout = false;
         }
     }
+
+
 }
 
 bool WebServer::eventListen(){
@@ -119,7 +123,7 @@ bool WebServer::eventListen(){
         LOG_ERROR("fail to bind port: %d", m_port);
         return false;
     }
-
+    LOG_DEBUG("SOMAXCONN %d", SOMAXCONN);
     ret = listen(m_listenFd, SOMAXCONN);
     if (ret < 0){
         LOG_ERROR("fail to listen port: %d", m_port);
@@ -189,9 +193,11 @@ void WebServer::dealListen(){
 
     do {
         int fd = accept(m_listenFd, (sockaddr *)&addr, (socklen_t *)&addrlen);
-
-        if (fd < 0)
+        LOG_DEBUG("%d accept", ++accept_cnt);
+        if (fd < 0) {
+            LOG_DEBUG("accept failed: %d", errno);
             return;
+        }
         else if (HttpConn::m_user_cnt >= MAX_FD){
             sendError(fd, "Server is busy!");
             LOG_WARN("Http connections is full!");
@@ -273,18 +279,25 @@ void WebServer::closeConn(HttpConn *client){
 }
 
 void WebServer::readTask(HttpConn *client){
+    LOG_DEBUG("client %d enter read task", client->getFd());
     int readErrno = 0;
     if (client->read(readErrno) == -1 && !(readErrno == EAGAIN || readErrno == EWOULDBLOCK)){
+        LOG_DEBUG("client %d read err close", client->getFd());
         closeConn(client);
         return;
     }
 
     process(client);
+    LOG_DEBUG("client %d leave read task", client->getFd());
 }
 
 void WebServer::writeTask(HttpConn *client){
+    LOG_DEBUG("client %d enter write task", client->getFd());
     int writeErrno = 0;
+
+    LOG_DEBUG("client %d enter client write", client->getFd());
     int ret = client->write(writeErrno);
+    LOG_DEBUG("client %d leave client write", client->getFd());
 
     if(client->bytesToWrite() == 0) {
         if(client->isKeepAlive()) {
@@ -299,6 +312,7 @@ void WebServer::writeTask(HttpConn *client){
     }
 
     closeConn(client);
+    LOG_DEBUG("client %d leave write task", client->getFd());
 }
 
 void WebServer::process(HttpConn *client){

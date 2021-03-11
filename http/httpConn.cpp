@@ -36,10 +36,12 @@ int HttpConn::read(int &saveErrno){
 
         if (ret == -1) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                LOG_DEBUG("client %d read again", m_fd);
                 saveErrno = errno;
             }
             break;
         }else if(ret == 0){
+            LOG_DEBUG("client %d errno %d", m_fd, errno);
             return 0;
         }
 
@@ -52,12 +54,20 @@ int HttpConn::read(int &saveErrno){
 int HttpConn::write(int &saveErrno){
     int ret;
     do {
+        LOG_DEBUG("client %d origin iov0 len %d", m_fd, m_iov[0].iov_len);
+        LOG_DEBUG("client %d origin iov1 len %d", m_fd, m_iov[1].iov_len);
+        LOG_DEBUG("client %d iovcnt %d", m_fd, m_iov_cnt);
+
         ret = writev(m_fd, m_iov, m_iov_cnt);
+        LOG_DEBUG("client %d leave write ret %d", m_fd, ret);
 
         if(ret <= 0) {
             saveErrno = errno;
             break;
         }
+
+        LOG_DEBUG("client %d iov0 len %d", m_fd, ret, m_iov[0].iov_len);
+        LOG_DEBUG("client %d iov1 len %d", m_fd, ret, m_iov[1].iov_len);
 
         if(m_iov[0].iov_len + m_iov[1].iov_len  == 0){
             break;

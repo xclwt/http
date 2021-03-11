@@ -38,9 +38,9 @@ void Log::openNewLog(int oflag, const char *format, ...){
     }
 }
 
-[[noreturn]] void Log::asyncWrite(){
+void Log::asyncWrite(){
     string oneLog;
-    while (true){
+    while (m_log_open || !m_logQueue->empty()){
         m_logQueue->pop(oneLog);
         lock_guard<mutex> locker(m_mtx);
         write(m_fd, oneLog.c_str(), oneLog.size());

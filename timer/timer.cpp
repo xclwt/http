@@ -159,6 +159,7 @@ void cb_func(ClientData *user_data)
 {
     Epoller::getEpollInstance()->removefd(user_data->sockfd);
     //assert(user_data);
+    LOG_DEBUG("client %d timeout close", user_data->sockfd);
     close(user_data->sockfd);
     HttpConn::m_user_cnt--;
 }
